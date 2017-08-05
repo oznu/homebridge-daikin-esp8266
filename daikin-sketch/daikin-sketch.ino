@@ -268,7 +268,7 @@ void setup(void) {
   Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
 
   WiFi.hostname(accessoryName);
-  
+
   WiFi.begin(ssid, password);
 
   Serial.println("");
@@ -309,8 +309,8 @@ void setup(void) {
   /* POST /daikin
      Content-Type: application/json
      {
-       "mode": "heat",
-       "fan": "auto",
+       "targetMode": "heat",
+       "targetFanSpeed": "auto",
        "targetTemperature": 23,
        "swingVertical": true,
        "swingHorizontal": false,
