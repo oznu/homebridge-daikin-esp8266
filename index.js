@@ -97,8 +97,6 @@ class ThermostatAccessory {
       json: true
     })
     .then((res) => {
-      console.log(res)
-
       this.targetMode = this.targetModes[res.targetMode]
       this.targetTemperature = res.targetTemperature
       this.currentTemperature = res.currentTemperature
