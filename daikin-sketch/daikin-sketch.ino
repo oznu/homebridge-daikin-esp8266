@@ -267,6 +267,7 @@ void setup(void) {
 
   Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
 
+  WiFi.mode(WIFI_STA);
   WiFi.hostname(accessoryName);
 
   WiFi.begin(ssid, password);
