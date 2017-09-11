@@ -366,6 +366,11 @@ void setup(void) {
     ac.save();
   });
 
+  server.on("/restart", HTTP_GET, []() {
+    server.send(202);
+    ESP.restart();
+  });
+
   server.begin();
   Serial.println("HTTP server started");
 
