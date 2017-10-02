@@ -22,8 +22,12 @@
 
 MDNSResponder mdns;
 ESP8266WebServer server(80);
+
 IRDaikinESP dakinir(14);
-DHT dht(12, DHT22, 11); // 11 works fine for ESP8266
+DHT dht(12, DHT22, 11);
+
+// IRDaikinESP dakinir(5);
+// DHT dht(0, DHT11, 11);
 
 // Replace with your network credentials
 const char* ssid = "xxxx";
@@ -262,6 +266,18 @@ class AC {
     }
 } ac;
 
+// CORS Handler
+void sendCors() {
+  if (server.hasHeader("origin")) {
+      String originValue = server.header("origin");
+      server.sendHeader("Access-Control-Allow-Origin", originValue);
+      server.sendHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+      server.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      server.sendHeader("Access-Control-Max-Age", "600");
+      server.sendHeader("Vary", "Origin"); 
+  }
+}
+
 void setup(void) {
   delay(1000);
 
@@ -300,10 +316,16 @@ void setup(void) {
   ac.quietMode = false;
   ac.powerfulMode = false;
 
+  server.on("/daikin", HTTP_OPTIONS, []() {
+    sendCors();
+    server.send(200, "text/html", "ok");
+  });
+
   /* GET /daikin
      Content-Type: application/json
   */
   server.on("/daikin", HTTP_GET, []() {
+    sendCors();
     server.send(200, "application/json", ac.toJson());
   });
 
@@ -360,6 +382,7 @@ void setup(void) {
     dakinir.send();
 
     // send the HTTP response
+    sendCors();
     server.send(200, "application/json", "{\"status\": \"0\"}");
 
     // save settings to EEPROM
@@ -370,6 +393,13 @@ void setup(void) {
     server.send(202);
     ESP.restart();
   });
+
+  // list of headers to be recorded
+  const char * headerkeys[] = {"origin"};
+  size_t headerkeyssize = sizeof(headerkeys)/sizeof(char*);
+
+  // ask server to track these headers
+  server.collectHeaders(headerkeys, headerkeyssize);
 
   server.begin();
   Serial.println("HTTP server started");
