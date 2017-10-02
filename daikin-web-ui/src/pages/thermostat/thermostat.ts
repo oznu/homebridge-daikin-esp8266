@@ -13,6 +13,18 @@ import 'rxjs/add/operator/distinctUntilChanged'
 
 import { ResourceService } from '../../app/resource.service'
 
+export interface Thermostat {
+  currentTemperature: number
+  currentHumidity: number
+  targetMode: string
+  targetFanSpeed: string
+  targetTemperature: number
+  verticalSwing: boolean
+  horizontalSwing: boolean
+  quietMode: boolean
+  powerfulMode: boolean
+}
+
 @Component({
   templateUrl: 'thermostat.html'
 })
@@ -21,10 +33,14 @@ export class ThermostatPage implements OnInit {
   private alive = true
   private interval
   thermostatEndpoint = 'http://192.168.1.74/daikin'
-  thermostat = {}
+  thermostat: Thermostat
   colorTheme = 'dark'
 
   constructor(public navCtrl: NavController, private $resource: ResourceService) {
+    this.thermostat = <Thermostat> {
+      targetMode: 'off'
+    }
+
     this.thermostatChange
       .debounceTime(300)
       .distinctUntilChanged()
@@ -59,7 +75,7 @@ export class ThermostatPage implements OnInit {
   }
 
   async getThermostat() {
-    this.thermostat = await this.$resource.get(this.thermostatEndpoint)
+    this.thermostat = <Thermostat> await this.$resource.get(this.thermostatEndpoint)
     this.setTheme()
   }
 
