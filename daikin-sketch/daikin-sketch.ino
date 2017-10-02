@@ -371,11 +371,11 @@ void setup(void) {
     }
 
     if (body.containsKey("quiet")) {
-      ac.setQuietMode(body["quiet"]);
+      ac.setQuietMode(body["quietMode"]);
     }
 
     if (body.containsKey("powerful")) {
-      ac.setPowerfulMode(body["powerful"]);
+      ac.setPowerfulMode(body["powerfulMode"]);
     }
 
     // send the IR signal.
