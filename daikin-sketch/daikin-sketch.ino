@@ -8,6 +8,9 @@
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
+
+#include <WebSocketsServer.h>
+
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 
@@ -22,10 +25,13 @@
 
 MDNSResponder mdns;
 ESP8266WebServer server(80);
+WebSocketsServer webSocket = WebSocketsServer(81);
 
+// NodeMCU
 IRDaikinESP dakinir(14);
 DHT dht(12, DHT22, 11);
 
+/* Wemos D1 Mini */
 // IRDaikinESP dakinir(5);
 // DHT dht(0, DHT11, 11);
 
@@ -39,6 +45,7 @@ const char* accessoryName = "daikin-thermostat";
 // Default Settings
 class AC {
   public:
+    unsigned long loopLastRun;
     float currentTemperature;
     float currentHumidity;
     String targetMode;
@@ -73,6 +80,49 @@ class AC {
       setHorizontalSwing(horizontalSwing);
       setQuietMode(quietMode);
       setPowerfulMode(powerfulMode);
+    }
+
+    void handler(String payload) {
+      DynamicJsonBuffer jsonBuffer;
+      JsonObject& req = jsonBuffer.parseObject(payload);
+
+      /* Get and Set Target State */
+      if (req.containsKey("targetMode")) {
+        setTargetMode(req["targetMode"]);
+      }
+
+      /* Get and Set Fan Speed */
+      if (req.containsKey("targetFanSpeed")) {
+        setTargetFanSpeed(req["targetFanSpeed"]);
+      }
+
+      /* Get and Set Target Temperature */
+      if (req.containsKey("targetTemperature")) {
+        setTemperature(req["targetTemperature"]);
+      }
+
+      /* Other Settings */
+      if (req.containsKey("verticalSwing")) {
+        setVerticalSwing(req["verticalSwing"]);
+      }
+
+      if (req.containsKey("horizontalSwing")) {
+        setHorizontalSwing(req["horizontalSwing"]);
+      }
+
+      if (req.containsKey("quiet")) {
+        setQuietMode(req["quietMode"]);
+      }
+
+      if (req.containsKey("powerful")) {
+        setPowerfulMode(req["powerfulMode"]);
+      }
+
+      // send the IR signal.
+      dakinir.send();
+
+      // save settings to EEPROM
+      save();
     }
 
     void setTargetMode(String value) {
@@ -218,9 +268,20 @@ class AC {
       return res;
     }
 
+    void loop () {
+      unsigned long currentMillis = millis();
+
+      if (currentMillis - loopLastRun >= 30000) {
+        loopLastRun = currentMillis;
+
+        String res = toJson();
+        webSocket.broadcastTXT(res);
+      }
+    }
+
   private:
     bool dirty;
-    unsigned long previousMillis;
+    unsigned long dhtLastRead;
     float humidity;
     float temp;
 
@@ -249,8 +310,8 @@ class AC {
     void readDHT() {
       unsigned long currentMillis = millis();
 
-      if (currentMillis - previousMillis >= 5000) {
-        previousMillis = currentMillis;
+      if (currentMillis - dhtLastRead >= 5000) {
+        dhtLastRead = currentMillis;
 
         humidity = dht.readHumidity();
         temp = dht.readTemperature(false);
@@ -275,6 +336,31 @@ void sendCors() {
       server.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
       server.sendHeader("Access-Control-Max-Age", "600");
       server.sendHeader("Vary", "Origin"); 
+  }
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+  switch(type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[%u] Disconnected!\r\n", num);
+      break;
+    case WStype_CONNECTED: {
+      Serial.printf("[%u] Connected from url: %s\r\n", num, payload);
+      String res = ac.toJson();
+      webSocket.broadcastTXT(res);
+      break;
+    }
+    case WStype_TEXT: {
+      // send the payload to the ac handler
+      ac.handler((char *)&payload[0]);
+      break;
+    }
+    case WStype_BIN:
+      Serial.printf("[%u] get binary length: %u\r\n", num, length);
+      break;
+    default:
+      Serial.printf("Invalid WStype [%d]\r\n", type);
+      break;
   }
 }
 
@@ -321,72 +407,17 @@ void setup(void) {
     server.send(200, "text/html", "ok");
   });
 
-  /* GET /daikin
-     Content-Type: application/json
-  */
   server.on("/daikin", HTTP_GET, []() {
     sendCors();
     server.send(200, "application/json", ac.toJson());
   });
 
-  /* POST /daikin
-     Content-Type: application/json
-     {
-       "targetMode": "heat",
-       "targetFanSpeed": "auto",
-       "targetTemperature": 23,
-       "swingVertical": true,
-       "swingHorizontal": false,
-       "powerful": false,
-       "quiet": true
-     }
-  */
   server.on("/daikin", HTTP_POST, []() {
-    /* Parse the json body into the "body" variable */
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& body = jsonBuffer.parseObject(server.arg("plain"));
+    // send the body to the ac handler
+    ac.handler(server.arg("plain"));
 
-    /* Get and Set Target State */
-    if (body.containsKey("targetMode")) {
-      ac.setTargetMode(body["targetMode"]);
-    }
-
-    /* Get and Set Fan Speed */
-    if (body.containsKey("targetFanSpeed")) {
-      ac.setTargetFanSpeed(body["targetFanSpeed"]);
-    }
-
-    /* Get and Set Target Temperature */
-    if (body.containsKey("targetTemperature")) {
-      ac.setTemperature(body["targetTemperature"]);
-    }
-
-    /* Other Settings */
-    if (body.containsKey("verticalSwing")) {
-      ac.setVerticalSwing(body["verticalSwing"]);
-    }
-
-    if (body.containsKey("horizontalSwing")) {
-      ac.setHorizontalSwing(body["horizontalSwing"]);
-    }
-
-    if (body.containsKey("quiet")) {
-      ac.setQuietMode(body["quietMode"]);
-    }
-
-    if (body.containsKey("powerful")) {
-      ac.setPowerfulMode(body["powerfulMode"]);
-    }
-
-    // send the IR signal.
-    dakinir.send();
-
-    // send the HTTP response
     sendCors();
     server.send(200, "application/json", "{\"status\": \"0\"}");
-
-    // save settings to EEPROM
-    ac.save();
   });
 
   server.on("/restart", HTTP_GET, []() {
@@ -402,7 +433,11 @@ void setup(void) {
   server.collectHeaders(headerkeys, headerkeyssize);
 
   server.begin();
-  Serial.println("HTTP server started");
+  Serial.println("HTTP Server Started");
+
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+  Serial.println("WebSocket Server Started");
 
   dakinir.begin();
   Serial.println("IR Send Ready");
@@ -417,4 +452,6 @@ void setup(void) {
 
 void loop(void) {
   server.handleClient();
+  webSocket.loop();
+  ac.loop();
 }
