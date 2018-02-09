@@ -223,7 +223,7 @@ class ThermostatAccessory {
   toggleSwitch (key) {
     return {
       set (value, callback) {
-        console.log(`Called set ${key}: ${value}`)
+        this.log(`Called set ${key}: ${value}`)
         this.daikin.sendJson({[key]: value})
         callback(null)
       },
