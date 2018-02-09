@@ -121,6 +121,9 @@ class AC {
       // send the IR signal.
       dakinir.send();
 
+      // broadcast update
+      broadcast();
+
       // save settings to EEPROM
       save();
     }
@@ -268,14 +271,17 @@ class AC {
       return res;
     }
 
+    void broadcast() {
+      String res = toJson();
+      webSocket.broadcastTXT(res);
+    }
+
     void loop () {
       unsigned long currentMillis = millis();
 
       if (currentMillis - loopLastRun >= 30000) {
         loopLastRun = currentMillis;
-
-        String res = toJson();
-        webSocket.broadcastTXT(res);
+        broadcast();
       }
     }
 
@@ -335,7 +341,7 @@ void sendCors() {
       server.sendHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
       server.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
       server.sendHeader("Access-Control-Max-Age", "600");
-      server.sendHeader("Vary", "Origin"); 
+      server.sendHeader("Vary", "Origin");
   }
 }
 
@@ -346,8 +352,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length
       break;
     case WStype_CONNECTED: {
       Serial.printf("[%u] Connected from url: %s\r\n", num, payload);
-      String res = ac.toJson();
-      webSocket.broadcastTXT(res);
+      // broadcast current settings
+      ac.broadcast();
       break;
     }
     case WStype_TEXT: {
