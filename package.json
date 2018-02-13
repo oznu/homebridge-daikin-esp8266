@@ -9,11 +9,19 @@
     "homebridge-plugin"
   ],
   "engines": {
-    "homebridge": ">=0.2.5"
+    "homebridge": ">=0.4.30",
+    "node": ">=6.9.1"
   },
   "dependencies": {
-    "@oznu/ws-connect": "0.0.4",
+    "@oznu/ws-connect": "^0.0.4",
     "bonjour": "^3.5.0",
     "inflection": "^1.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/oznu/homebridge-daikin-esp8266.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oznu/homebridge-daikin-esp8266/issues"
   }
 }
