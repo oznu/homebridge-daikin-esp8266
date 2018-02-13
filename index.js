@@ -1,31 +1,153 @@
 'use strict'
 
+const Bonjour = require('bonjour')
+const inflection = require('inflection')
 const WebSocket = require('@oznu/ws-connect')
 
-var Service, Characteristic
+let Accessory, Service, Characteristic, UUIDGen
 
 module.exports = function (homebridge) {
+  Accessory = homebridge.platformAccessory
   Service = homebridge.hap.Service
   Characteristic = homebridge.hap.Characteristic
-  homebridge.registerAccessory('homebridge-daikin-esp8266', 'Daikin ESP8266', ThermostatAccessory)
+  UUIDGen = homebridge.hap.uuid
+
+  homebridge.registerPlatform('homebridge-daikin-esp8266', 'daikin-esp8266-platform', ThermostatPlatform, true)
 }
 
-class ThermostatAccessory {
-  constructor (log, config) {
+class ThermostatPlatform {
+  constructor (log, config, api) {
     this.log = log
     this.config = config
-    this.service = new Service.Thermostat(this.config.name)
+    this.accessories = {}
 
-    this.daikin = new WebSocket(`ws://${this.config.host}:${this.config.port || 81}`, {
+    // Start Bonjour
+    const bonjour = Bonjour()
+
+    // Browse for all oznu-platform services
+    const browser = bonjour.find({ type: 'oznu-platform' })
+
+    // Called when a device is found
+    browser.on('up', (service) => {
+      if (service.txt.type && service.txt.type === 'daikin-thermostat') {
+        const UUID = UUIDGen.generate(service.txt.mac)
+        const accessoryConfig = {host: service.referer.address, port: service.port, name: service.name, serial: service.txt.mac}
+
+        if (!this.accessories[UUID]) {
+          // New Accessory
+          log(`Found new Daikin thermostat at ${service.referer.address}:${service.port} [${service.txt.mac}]`)
+          this.accessories[UUID] = new Accessory(service.txt.mac.replace(/:/g, ''), UUID)
+          this.startAccessory(this.accessories[UUID], accessoryConfig)
+          api.registerPlatformAccessories('homebridge-daikin-esp8266', 'daikin-esp8266-platform', [this.accessories[UUID]])
+        } else {
+          // Existing Accessory
+          log(`Found existing Daikin thermostat at ${service.referer.address}:${service.port} [${service.txt.mac}]`)
+          this.startAccessory(this.accessories[UUID], accessoryConfig)
+        }
+      }
+    })
+
+    // Check bonjour again 5 seconds after launch
+    setTimeout(() => {
+      browser.update()
+    }, 5000)
+
+    // Check bonjour every 60 seconds
+    setInterval(() => {
+      browser.update()
+    }, 60000)
+  }
+
+  // Called when a cached accessory is loaded
+  configureAccessory (accessory) {
+    this.accessories[accessory.UUID] = accessory
+  }
+
+  // Start accessory service
+  startAccessory (accessory, config) {
+    const device = new ThermostatPlatformAccessory(this.log, accessory, config)
+
+    // Thermostat Accessory Information
+    accessory.getService(Service.AccessoryInformation)
+      .setCharacteristic(Characteristic.Manufacturer, 'oznu-platform')
+      .setCharacteristic(Characteristic.Model, 'daikin-esp8266')
+      .setCharacteristic(Characteristic.SerialNumber, config.serial)
+
+    // Thermostat Characteristic Handlers
+    accessory.getService(Service.Thermostat)
+      .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
+      .on('get', device.getCurrentHeatingCoolingState.bind(device))
+
+    accessory.getService(Service.Thermostat)
+      .getCharacteristic(Characteristic.TargetHeatingCoolingState)
+      .on('get', device.getTargetHeatingCoolingState.bind(device))
+      .on('set', device.setTargetHeatingCoolingState.bind(device))
+
+    accessory.getService(Service.Thermostat)
+      .getCharacteristic(Characteristic.TargetTemperature)
+      .on('get', device.getTargetTemperature.bind(device))
+      .on('set', device.setTargetTemperature.bind(device))
+      .setProps({
+        minValue: 18,
+        maxValue: 30,
+        minStep: 1
+      })
+
+    accessory.getService(Service.Thermostat)
+      .getCharacteristic(Characteristic.CurrentTemperature)
+      .on('get', device.getCurrentTemperature.bind(device))
+
+    accessory.getService(Service.Thermostat)
+      .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+      .on('get', device.getCurrentRelativeHumidity.bind(device))
+
+    accessory.getService(Service.Thermostat)
+      .getCharacteristic(Characteristic.TemperatureDisplayUnits)
+      .on('get', device.getTemperatureDisplayUnits.bind(device))
+      .on('set', device.setTemperatureDisplayUnits.bind(device))
+
+    // Update reachability
+    accessory.updateReachability(true)
+  }
+}
+
+class ThermostatPlatformAccessory {
+  constructor (log, accessory, config) {
+    this.accessory = accessory
+    this.config = config
+    this.name = `${inflection.titleize(this.config.name.replace(/-/g, ' '))}`
+    this.log = (msg) => log(`[${this.name}] ${msg}`)
+
+    // Setup Base Service
+    this.service = accessory.getService(Service.Thermostat) ? accessory.getService(Service.Thermostat) : accessory.addService(Service.Thermostat, this.name)
+
+    // Setup WebSocket
+    this.daikin = new WebSocket(`ws://${this.config.host}:${this.config.port}`, {
       options: {
         handshakeTimeout: 2000
       }
     })
 
+    // Setup WebSocket Handlers
     this.daikin.on('websocket-status', this.log)
-
     this.daikin.on('json', this.parseCurrentState.bind(this))
 
+    // Defaults
+    this.settings = {
+      targetMode: Characteristic.TargetHeatingCoolingState.OFF,
+      currentMode: Characteristic.CurrentHeatingCoolingState.OFF,
+      temperatureDisplayUnits: Characteristic.TemperatureDisplayUnits.CELSIUS,
+      currentTemperature: 0,
+      currentHumidity: 0,
+      targetFanSpeed: 'auto',
+      targetTemperature: 23,
+      verticalSwing: true,
+      horizontalSwing: true,
+      quietMode: false,
+      powerfulMode: false
+    }
+
+    // Helpers
     this.targetModes = {
       cool: Characteristic.TargetHeatingCoolingState.COOL,
       heat: Characteristic.TargetHeatingCoolingState.HEAT,
@@ -39,198 +161,115 @@ class ThermostatAccessory {
       off: Characteristic.CurrentHeatingCoolingState.OFF
     }
 
-    // Defaults
-    this.targetMode = Characteristic.TargetHeatingCoolingState.OFF
-    this.currentMode = Characteristic.CurrentHeatingCoolingState.OFF
-    this.temperatureDisplayUnits = Characteristic.TemperatureDisplayUnits.CELSIUS
-    this.currentTemperature = 0
-    this.currentHumidity = 0
-    this.targetFanSpeed = 'auto'
-    this.targetTemperature = 23
-    this.verticalSwing = true
-    this.horizontalSwing = true
-    this.quietMode = false
-    this.powerfulMode = false
+    // Accessory Switches
+    this.switches = ['Vertical Swing', 'Horizontal Swing', 'Quiet Mode', 'Powerful Mode']
 
-    // Toggle State Services
-    this.switches = [
-      {
-        service: new Service.Switch(`Vertical Swing - ${this.config.name} `, 'vertical'),
-        set: this.toggleSwitch('verticalSwing').set,
-        get: this.toggleSwitch('verticalSwing').get
-      },
-      {
-        service: new Service.Switch(`Horizontal Swing - ${this.config.name} `, 'horizontal'),
-        set: this.toggleSwitch('horizontalSwing').set,
-        get: this.toggleSwitch('horizontalSwing').get
-      },
-      {
-        service: new Service.Switch(`Quiet Mode - ${this.config.name} `, 'quiet'),
-        set: this.toggleSwitch('quietMode').set,
-        get: this.toggleSwitch('quietMode').get
-      },
-      {
-        service: new Service.Switch(`Powerful Mode - ${this.config.name} `, 'powerful'),
-        set: this.toggleSwitch('powerfulMode').set,
-        get: this.toggleSwitch('powerfulMode').get
-      }
-    ]
-  }
+    // Publish Accessory Switch Services
+    this.switches.forEach((setting) => {
+      const name = `${this.name} ${setting}`
+      const subtype = inflection.camelize(setting.replace(/ /g, '_'), true)
+      const switchService = accessory.getService(name) ? accessory.getService(name) : accessory.addService(Service.Switch, name, subtype)
 
-  getServices () {
-    var informationService = new Service.AccessoryInformation()
-      .setCharacteristic(Characteristic.Manufacturer, 'oznu')
-      .setCharacteristic(Characteristic.Model, 'daikin-esp8266')
-      .setCharacteristic(Characteristic.SerialNumber, 'oznu-ir-thermostat')
-
-    this.service
-      .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-      .on('get', this.getCurrentHeatingCoolingState.bind(this))
-
-    this.service
-      .getCharacteristic(Characteristic.TargetHeatingCoolingState)
-      .on('get', this.getTargetHeatingCoolingState.bind(this))
-      .on('set', this.setTargetHeatingCoolingState.bind(this))
-
-    this.service
-      .getCharacteristic(Characteristic.TargetTemperature)
-      .on('get', this.getTargetTemperature.bind(this))
-      .on('set', this.setTargetTemperature.bind(this))
-      .setProps({
-        minValue: 18,
-        maxValue: 30,
-        minStep: 1
-      })
-
-    this.service
-      .getCharacteristic(Characteristic.CurrentTemperature)
-      .on('get', this.getCurrentTemperature.bind(this))
-
-    this.service
-      .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-      .on('get', this.getCurrentRelativeHumidity.bind(this))
-
-    this.service
-      .getCharacteristic(Characteristic.TemperatureDisplayUnits)
-      .on('get', this.getTemperatureDisplayUnits.bind(this))
-      .on('set', this.setTemperatureDisplayUnits.bind(this))
-
-    this.service
-      .getCharacteristic(Characteristic.Name)
-      .on('get', this.getName.bind(this))
-
-    const switchServices = this.switches.map((accessory) => {
-      accessory.service
-        .getCharacteristic(Characteristic.On)
-        .on('get', accessory.get.bind(this))
-        .on('set', accessory.set.bind(this))
-
-      return accessory.service
+      switchService.getCharacteristic(Characteristic.On)
+        .on('get', this.toggleSwitchHandler(subtype).get.bind(this))
+        .on('set', this.toggleSwitchHandler(subtype).set.bind(this))
     })
-
-    return [informationService, this.service].concat(switchServices)
-  }
-
-  getName (callback) {
-    callback(null, this.config.name)
   }
 
   parseCurrentState (res) {
-    this.targetMode = this.targetModes[res.targetMode]
-    this.targetTemperature = res.targetTemperature
-    this.currentTemperature = res.currentTemperature
-    this.currentHumidity = res.currentHumidity
-    this.targetFanSpeed = res.targetFanSpeed
-    this.verticalSwing = res.verticalSwing ? 1 : 0
-    this.horizontalSwing = res.horizontalSwing ? 1 : 0
-    this.quietMode = res.quietMode ? 1 : 0
-    this.powerfulMode = res.powerfulMode ? 1 : 0
+    res.targetMode = this.targetModes[res.targetMode]
+    res.verticalSwing = res.verticalSwing ? 1 : 0
+    res.horizontalSwing = res.horizontalSwing ? 1 : 0
+    res.quietMode = res.quietMode ? 1 : 0
+    res.powerfulMode = res.powerfulMode ? 1 : 0
 
-    this.service.updateCharacteristic(Characteristic.TargetTemperature, this.targetTemperature)
-    this.service.updateCharacteristic(Characteristic.TargetHeatingCoolingState, this.targetMode)
-    this.service.updateCharacteristic(Characteristic.CurrentTemperature, this.currentTemperature)
-    this.service.updateCharacteristic(Characteristic.CurrentRelativeHumidity, this.currentHumidity)
+    // Update settings
+    Object.assign(this.settings, res)
+
+    // Tell HomeKit about the update
+    this.service.updateCharacteristic(Characteristic.TargetTemperature, this.settings.targetTemperature)
+    this.service.updateCharacteristic(Characteristic.TargetHeatingCoolingState, this.settings.targetMode)
+    this.service.updateCharacteristic(Characteristic.CurrentTemperature, this.settings.currentTemperature)
+    this.service.updateCharacteristic(Characteristic.CurrentRelativeHumidity, this.settings.currentHumidity)
 
     this.getCurrentHeatingCoolingState()
   }
 
   getCurrentHeatingCoolingState (callback) {
-    let mode = Object.keys(this.targetModes).find(key => this.targetModes[key] === this.targetMode)
+    const mode = Object.keys(this.targetModes).find(key => this.targetModes[key] === this.settings.targetMode)
+
     if (['off', 'cool', 'heat'].includes(mode)) {
-      this.currentMode = this.currentModes[mode]
+      this.settings.currentMode = this.currentModes[mode]
     } else {
-      if (this.currentTemperature > this.targetTemperature) {
-        this.currentMode = this.currentModes['cool']
+      if (this.settings.currentTemperature > this.settings.targetTemperature) {
+        this.settings.currentMode = this.currentModes['cool']
       } else {
-        this.currentMode = this.currentModes['heat']
+        this.settings.currentMode = this.currentModes['heat']
       }
     }
 
-    this.service.updateCharacteristic(Characteristic.CurrentHeatingCoolingState, this.currentMode)
-
     if (arguments.length) {
-      callback(null, this.currentMode)
+      callback(null, this.settings.currentMode)
+    } else {
+      this.service.updateCharacteristic(Characteristic.CurrentHeatingCoolingState, this.settings.currentMode)
     }
   }
 
   getTargetHeatingCoolingState (callback) {
-    callback(null, this.targetMode)
-  }
-
-  getTargetTemperature (callback) {
-    this.log(`Called getTargetTemperature: ${this.targetTemperature}`)
-    callback(null, this.targetTemperature)
-  }
-
-  getCurrentTemperature (callback) {
-    this.log('Called getCurrentTemperature')
-    callback(null, this.currentTemperature)
-  }
-
-  getCurrentRelativeHumidity (callback) {
-    this.log('Called getCurrentRelativeHumidity')
-    callback(null, this.currentHumidity)
-  }
-
-  getTemperatureDisplayUnits (callback) {
-    callback(null, this.temperatureDisplayUnits)
+    callback(null, this.settings.targetMode)
   }
 
   setTargetHeatingCoolingState (value, callback) {
-    this.targetMode = value
+    this.settings.targetMode = value
     let mode = Object.keys(this.targetModes).find(key => this.targetModes[key] === value)
     this.log(`Called setTargetHeatingCoolingState: ${mode}`)
     this.daikin.sendJson({targetMode: mode})
     callback(null)
   }
 
+  getTargetTemperature (callback) {
+    this.log(`Called getTargetTemperature: ${this.settings.targetTemperature}`)
+    callback(null, this.settings.targetTemperature)
+  }
+
   setTargetTemperature (value, callback) {
     this.log(`Called setTargetTemperature ${value}`)
-    this.targetTemperature = value
+    this.settings.targetTemperature = value
     this.daikin.sendJson({targetTemperature: value})
     callback(null)
   }
 
+  getCurrentTemperature (callback) {
+    callback(null, this.settings.currentTemperature)
+  }
+
+  getCurrentRelativeHumidity (callback) {
+    callback(null, this.settings.currentHumidity)
+  }
+
+  getTemperatureDisplayUnits (callback) {
+    callback(null, this.settings.temperatureDisplayUnits)
+  }
+
   setTemperatureDisplayUnits (value, callback) {
-    this.log('Called setTemperatureDisplayUnits')
+    this.log(`Called setTemperatureDisplayUnits: ${value}`)
     setTimeout(() => {
-      this.service.updateCharacteristic(Characteristic.TemperatureDisplayUnits, 0)
+      this.service.updateCharacteristic(Characteristic.TemperatureDisplayUnits, this.settings.temperatureDisplayUnits)
     }, 100)
-    this.temperatureDisplayUnits = value
     callback(null)
   }
 
-  toggleSwitch (key) {
+  toggleSwitchHandler (key) {
     return {
       set (value, callback) {
         this.log(`Called set ${key}: ${value}`)
+        this.settings[key] = value
         this.daikin.sendJson({[key]: value})
         callback(null)
       },
       get (callback) {
-        callback(null, this[key])
+        callback(null, this.settings[key])
       }
     }
   }
-
 }

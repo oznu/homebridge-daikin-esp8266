@@ -451,6 +451,11 @@ void setup(void) {
   dht.begin();
   Serial.println("DHT Ready");
 
+  // Add service to mdns-sd
+  mdns.addService("oznu-platform", "tcp", 81);
+  mdns.addServiceTxt("oznu-platform", "tcp", "type", "daikin-thermostat");
+  mdns.addServiceTxt("oznu-platform", "tcp", "mac", WiFi.macAddress());
+
   // Restore previous settings
   EEPROM.begin(512);
   ac.restore();

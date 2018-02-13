@@ -12,6 +12,8 @@
     "homebridge": ">=0.2.5"
   },
   "dependencies": {
-    "@oznu/ws-connect": "0.0.4"
+    "@oznu/ws-connect": "0.0.4",
+    "bonjour": "^3.5.0",
+    "inflection": "^1.12.0"
   }
 }
