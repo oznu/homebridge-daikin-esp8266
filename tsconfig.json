@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "outDir": "dist",
+    "sourceMap": true,
+    "noUnusedLocals": true,
+    "lib": [
+      "dom",
+      "es7"
+    ]
+  },
+  "files": [
+    "./node_modules/@types/node/index.d.ts"
+  ],
+  "include": [
+    "plugin/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
