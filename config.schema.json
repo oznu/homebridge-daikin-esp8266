@@ -2,7 +2,6 @@
   "pluginAlias": "daikin-esp8266-platform",
   "pluginType": "platform",
   "headerDisplay":"This plugin works with an Arduino sketch which is available [here](https://github.com/oznu/homebridge-esp8266-fan/blob/master/sketch/sketch.ino).",
-  "footerDisplay": "![Wiring Diagram](https://raw.githubusercontent.com/oznu/homebridge-daikin-esp8266/master/wiring.png)",
   "schema": {
     "type": "object",
     "properties": {
