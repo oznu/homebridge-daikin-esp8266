@@ -1,6 +1,6 @@
 {
   "name": "homebridge-daikin-esp8266",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "A Homebridge plugin to control a Daikin AC unit using an esp8266 microcontroller.",
   "main": "dist/index.js",
   "author": "oznu <dev@oz.nu>",
