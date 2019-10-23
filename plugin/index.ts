@@ -55,7 +55,7 @@ class ThermostatPlatform {
 
   // Called when a device is found
   async foundAccessory(service) {
-    if (service.txt.type && service.txt.type === 'daikin-thermostatt') {
+    if (service.txt.type && service.txt.type === 'daikin-thermostat') {
       const UUID = UUIDGen.generate(service.txt.mac);
       const host = await mdnsResolver.resolve4(service.host);
       const accessoryConfig = { host: host, port: service.port, name: service.name, serial: service.txt.mac };
@@ -82,7 +82,6 @@ class ThermostatPlatform {
   // Called when a cached accessory is loaded
   configureAccessory(accessory) {
     this.accessories[accessory.UUID] = accessory;
-    console.log(accessory);
   }
 
   // Start accessory service
