@@ -19,12 +19,14 @@ class ThermostatPlatform {
   log: any;
   config: any;
   accessories: any;
+  activeAccessories: string[];
 
   constructor(log, config, api) {
     this.api = api;
     this.log = log;
     this.config = config;
     this.accessories = {};
+    this.activeAccessories = [];
 
     const bonjour = Bonjour();
     const browser = bonjour.find({ type: 'oznu-platform' });
@@ -40,14 +42,28 @@ class ThermostatPlatform {
     setInterval(() => {
       browser.update();
     }, 60000);
+
+    // Clean up missing thermostats if they are still not present after 5 minutes
+    setTimeout(() => {
+      for (const [uuid, accessory] of Object.entries(this.accessories)) {
+        if (!this.activeAccessories.includes(uuid)) {
+          this.api.unregisterPlatformAccessories('homebridge-daikin-esp8266', 'daikin-esp8266-platform', [accessory]);
+        }
+      }
+    }, 300000);
   }
 
   // Called when a device is found
   async foundAccessory(service) {
-    if (service.txt.type && service.txt.type === 'daikin-thermostat') {
+    if (service.txt.type && service.txt.type === 'daikin-thermostatt') {
       const UUID = UUIDGen.generate(service.txt.mac);
       const host = await mdnsResolver.resolve4(service.host);
       const accessoryConfig = { host: host, port: service.port, name: service.name, serial: service.txt.mac };
+
+      // Mark the accessory as found so it will not be removed
+      if (!this.activeAccessories.includes(UUID)) {
+        this.activeAccessories.push(UUID);
+      }
 
       if (!this.accessories[UUID]) {
         // New Accessory
@@ -66,6 +82,7 @@ class ThermostatPlatform {
   // Called when a cached accessory is loaded
   configureAccessory(accessory) {
     this.accessories[accessory.UUID] = accessory;
+    console.log(accessory);
   }
 
   // Start accessory service
@@ -124,6 +141,11 @@ class ThermostatPlatformAccessory {
   service: any;
   daikin: any;
 
+  verticalSwingService: SwitchService;
+  horizontalSwingService: SwitchService;
+  quietModeService: SwitchService;
+  powerfulModeService: SwitchService;
+
   settings = {
     targetMode: Characteristic.TargetHeatingCoolingState.OFF,
     currentMode: Characteristic.CurrentHeatingCoolingState.OFF,
@@ -151,8 +173,6 @@ class ThermostatPlatformAccessory {
     off: Characteristic.CurrentHeatingCoolingState.OFF
   };
 
-  switches = ['Vertical Swing', 'Horizontal Swing', 'Quiet Mode', 'Powerful Mode'];
-
   constructor(log, accessory, config) {
     this.accessory = accessory;
     this.config = config;
@@ -175,15 +195,10 @@ class ThermostatPlatformAccessory {
     this.daikin.on('json', this.parseCurrentState.bind(this));
 
     // Publish Accessory Switch Services
-    this.switches.forEach((setting) => {
-      const name = `${this.name} ${setting}`;
-      const subtype = inflection.camelize(setting.replace(/ /g, '_'), true);
-      const switchService = accessory.getService(name) ? accessory.getService(name) : accessory.addService(Service.Switch, name, subtype);
-
-      switchService.getCharacteristic(Characteristic.On)
-        .on('get', this.toggleSwitchHandler(subtype).get.bind(this))
-        .on('set', this.toggleSwitchHandler(subtype).set.bind(this));
-    });
+    this.verticalSwingService = new SwitchService('Vertical Swing', this);
+    this.horizontalSwingService = new SwitchService('Horizontal Swing', this);
+    this.quietModeService = new SwitchService('Quiet Mode', this);
+    this.powerfulModeService = new SwitchService('Powerful Mode', this);
   }
 
   parseCurrentState(res) {
@@ -201,6 +216,11 @@ class ThermostatPlatformAccessory {
     this.service.updateCharacteristic(Characteristic.TargetHeatingCoolingState, this.settings.targetMode);
     this.service.updateCharacteristic(Characteristic.CurrentTemperature, this.settings.currentTemperature);
     this.service.updateCharacteristic(Characteristic.CurrentRelativeHumidity, this.settings.currentHumidity);
+
+    this.verticalSwingService.service.updateCharacteristic(Characteristic.On, this.settings.verticalSwing);
+    this.horizontalSwingService.service.updateCharacteristic(Characteristic.On, this.settings.horizontalSwing);
+    this.quietModeService.service.updateCharacteristic(Characteristic.On, this.settings.quietMode);
+    this.powerfulModeService.service.updateCharacteristic(Characteristic.On, this.settings.powerfulMode);
 
     this.getCurrentHeatingCoolingState();
   }
@@ -268,18 +288,36 @@ class ThermostatPlatformAccessory {
     }, 100);
     callback(null);
   }
+}
 
-  toggleSwitchHandler(key) {
-    return {
-      set(value, callback) {
-        this.log(`Called set ${key}: ${value}`);
-        this.settings[key] = value;
-        this.daikin.sendJson({[key]: value});
-        callback(null);
-      },
-      get(callback) {
-        callback(null, this.settings[key]);
-      }
-    };
+class SwitchService {
+  type: string;
+  platform: ThermostatPlatformAccessory;
+  service: any;
+  subtype: string;
+
+  constructor(type, platform) {
+    this.platform = platform;
+
+    const name = `${this.platform.name} ${type}`;
+    this.subtype = inflection.camelize(type.replace(/ /g, '_'), true);
+    this.service = this.platform.accessory.getService(name) ?
+      this.platform.accessory.getService(name) : this.platform.accessory.addService(Service.Switch, name, this.subtype);
+
+    this.service.getCharacteristic(Characteristic.On)
+      .on('get', this.onGetHandler.bind(this))
+      .on('set', this.onSetHandler.bind(this));
+  }
+
+  onSetHandler(value, callback) {
+    this.platform.log(`Called set ${this.subtype}: ${value}`);
+    this.platform.settings[this.subtype] = value;
+    this.platform.daikin.sendJson({ [this.subtype]: value });
+    this.service.updateCharacteristic(Characteristic.On, value);
+    callback(null);
+  }
+
+  onGetHandler(callback) {
+    callback(null, this.platform.settings[this.subtype]);
   }
 }
