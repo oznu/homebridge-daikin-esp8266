@@ -2,10 +2,10 @@
 #define Ac_h
 
 #include <EEPROM.h>
-#include <ArduinoJson.h>              // https://github.com/bblanchon/ArduinoJson
-#include <WebSocketsServer.h>         // https://github.com/Links2004/arduinoWebSockets
-#include <DHT.h>                      // https://github.com/adafruit/DHT-sensor-library
-#include <IRremoteESP8266.h>          // https://github.com/crankyoldgit/IRremoteESP8266
+#include <ArduinoJson.h>              // v5.13.2 - https://github.com/bblanchon/ArduinoJson
+#include <WebSocketsServer.h>         // v2.1.4 - https://github.com/Links2004/arduinoWebSockets
+#include <DHT.h>                      // v1.3.0 - https://github.com/adafruit/DHT-sensor-library
+#include <IRremoteESP8266.h>          // v2.6.6 - https://github.com/crankyoldgit/IRremoteESP8266
 #include <IRsend.h>
 #include <ir_Daikin.h>
 #include <ir_Panasonic.h>
