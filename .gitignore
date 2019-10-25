@@ -2,3 +2,4 @@ node_modules
 build
 dist
 .arduino-output
+.vscode/c_cpp_properties.json
