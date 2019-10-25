@@ -309,7 +309,7 @@ void Ac::setVerticalSwing(bool value) {
   if (mode == DAIKIN) {
     daikin.setSwingVertical(value);
   } else if (mode == PANASONIC) {
-    panasonic.setSwingVertical(value ? kPanasonicAcSwingVAuto : kPanasonicAcSwingVUp);
+    panasonic.setSwingVertical(value ? kPanasonicAcSwingVAuto : kPanasonicAcSwingVHighest);
   }
   if (value != verticalSwing) {
     Serial.print("Verticle Swing: ");

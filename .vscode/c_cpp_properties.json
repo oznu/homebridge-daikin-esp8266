@@ -10,7 +10,9 @@
                 "${env:HOME}/Documents/Arduino/libraries/PubSubClient/tests/src/lib",
                 "${env:HOME}/Library/Arduino15/packages/esp8266/hardware/esp8266/**",
                 "${env:HOME}/Library/Arduino15/packages/esp8266/hardware/esp8266/2.5.0/**",
-                "${env:HOME}/Library/Arduino15/packages/esp8266/hardware/esp8266/2.5.2/**"
+                "${env:HOME}/Library/Arduino15/packages/esp8266/hardware/esp8266/2.5.2/**",
+                "/Users/john/Library/Arduino15/packages/esp8266/hardware/esp8266/2.5.2/**",
+                "/Users/john/Library/Arduino15/packages/esp8266/tools/**"
             ],
             "defines": [],
             "macFrameworkPath": [
