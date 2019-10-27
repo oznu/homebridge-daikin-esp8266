@@ -3,3 +3,4 @@ build
 dist
 .arduino-output
 .vscode/c_cpp_properties.json
+homebridge-daikin-esp8266-*.tgz

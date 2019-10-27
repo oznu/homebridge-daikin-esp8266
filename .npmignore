@@ -1,5 +1,11 @@
 daikin-sketch
 build
 plugin
-.vscode
 wiring.png
+.arduino-output
+.vscode
+nodemon.json
+sketch
+tsconfig.json
+tslint.json
+homebridge-daikin-esp8266-*.tgz
