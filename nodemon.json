@@ -1,8 +1,9 @@
 {
   "watch": [
-    "plugin"
+    "src"
   ],
   "ext": "ts",
   "ignore": [],
-  "exec": "tsc && homebridge -I"
+  "exec": "tsc && homebridge -I -D",
+  "signal": "SIGTERM"
 }

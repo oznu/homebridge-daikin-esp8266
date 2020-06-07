@@ -1,21 +1,23 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "ES2018", // ~node10
     "module": "commonjs",
-    "outDir": "dist",
-    "sourceMap": true,
-    "noUnusedLocals": true,
     "lib": [
-      "es2017"
-    ]
+      "es2018"
+    ],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "noImplicitAny": false
   },
-  "files": [
-    "./node_modules/@types/node/index.d.ts"
-  ],
   "include": [
-    "plugin/**/*.ts"
+    "src/"
   ],
   "exclude": [
-    "node_modules"
+    "**/*.spec.ts"
   ]
 }

@@ -1,4 +1,12 @@
 {
+  "files.eol": "\n",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  },
+  "editor.rulers": [
+    160
+  ],
+  "eslint.enable": true,
   "[cpp]": {
     "editor.formatOnPaste": false,
     "editor.formatOnSave": false,

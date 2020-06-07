@@ -10,6 +10,33 @@
         "type": "string",
         "default": "Daikin AC",
         "required": true
+      },
+      "oscillateDirection": {
+        "title": "Oscillate Direction",
+        "description": "Control the oscillate direction of the device 'Oscillate' option in the Home app. You can still use the other switch accessories to control the other swing mode direction.",
+        "type": "string",
+        "default": "horizontal+vertical",
+        "oneOf": [
+          {
+            "title": "Horizontal + Vertical",
+            "enum": [
+              "horizontal+vertical"
+            ]
+          },
+          {
+            "title": "Vertical",
+            "enum": [
+              "vertical"
+            ]
+          },
+          {
+            "title": "Horizontal",
+            "enum": [
+              "horizontal"
+            ]
+          }
+        ],
+        "required": true
       }
     }
   }
