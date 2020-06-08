@@ -9,3 +9,4 @@ sketch
 tsconfig.json
 tslint.json
 homebridge-daikin-esp8266-*.tgz
+src

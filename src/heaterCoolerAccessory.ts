@@ -126,13 +126,25 @@ export class HeaterCoolerAccessory {
       this.service.updateCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.Characteristic.CurrentHeaterCoolerState.INACTIVE);
     } else {
       this.service.updateCharacteristic(this.Characteristic.Active, this.Characteristic.Active.ACTIVE);
-      this.service.updateCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.currentModes[currentState.targetMode]);
+      if (currentState.targetMode === 'auto') {
+        if (currentState.currentTemperature > currentState.targetTemperature) {
+          this.service.updateCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.currentModes.cool);
+        } else {
+          this.service.updateCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.currentModes.heat);
+        }
+      } else {
+        this.service.updateCharacteristic(this.Characteristic.CurrentHeaterCoolerState, this.currentModes[currentState.targetMode]);
+      }
       this.service.updateCharacteristic(this.Characteristic.TargetHeaterCoolerState, this.targetModes[currentState.targetMode]);
     }
 
+    if (currentState.targetMode === 'auto' || currentState.targetMode === 'heat') {
+      this.service.updateCharacteristic(this.Characteristic.HeatingThresholdTemperature, currentState.targetTemperature);
+    } else {
+      this.service.updateCharacteristic(this.Characteristic.CoolingThresholdTemperature, currentState.targetTemperature);
+    }
+
     this.service.updateCharacteristic(this.Characteristic.CurrentTemperature, currentState.currentTemperature);
-    this.service.updateCharacteristic(this.Characteristic.HeatingThresholdTemperature, currentState.targetTemperature);
-    this.service.updateCharacteristic(this.Characteristic.CoolingThresholdTemperature, currentState.targetTemperature);
 
     this.currentFanState = currentState.targetFanSpeed;
     this.service.updateCharacteristic(this.Characteristic.RotationSpeed, this.targetFanSpeeds[currentState.targetFanSpeed]);
