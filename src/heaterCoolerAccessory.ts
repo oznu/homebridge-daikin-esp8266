@@ -1,5 +1,6 @@
 import { Service, Characteristic, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback } from 'homebridge';
-import WebSocket from '@oznu/ws-connect';
+import { WebSocket } from '@oznu/ws-connect';
+import { resolve4 } from 'mdns-resolver';
 
 import { HeaterCoolerPlatform, HeaterCoolerDeviceConfig } from './heaterCoolerPlatform';
 import { HeaterCoolerToggleSwitch } from './heaterCoolerToggleSwitch';
@@ -108,14 +109,26 @@ export class HeaterCoolerAccessory {
       .on('set', this.setSwingModeHandler.bind(this));
 
     // Setup WebSocket
-    this.deviceSocket = new WebSocket(`ws://${this.deviceConfig.host}:${this.deviceConfig.port}`, {
+    this.deviceSocket = new WebSocket('', {
       options: {
-        handshakeTimeout: 2000,
+        handshakeTimeout: 10000,
+      },
+      beforeConnect: async () => {
+        try {
+          const hostIp = await resolve4(this.deviceConfig.host);
+          const socketAddress = `ws://${hostIp}:${this.deviceConfig.port}`;
+          this.deviceSocket.setAddresss(socketAddress);
+        } catch (e) {
+          this.platform.log.warn(e.message);
+        }
       },
     });
 
     // Setup WebSocket Handlers
-    this.deviceSocket.on('websocket-status', this.platform.log.info.bind(this.platform));
+    this.deviceSocket.on('websocket-status', (msg) => {
+      this.platform.log.info(msg);
+    });
+
     this.deviceSocket.on('json', this.parseCurrentState.bind(this));
   }
 
@@ -169,6 +182,11 @@ export class HeaterCoolerAccessory {
 
   setActiveHandler(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     this.platform.log.debug(`Set Active: ${this.deviceConfig.name} -> ${value}`);
+    if (!this.deviceSocket.isConnected()) {
+      this.platform.log.error(`Device Not Connected - ${this.deviceSocket.host}`);
+      return callback(new Error('Device Not Connected'));
+    }
+
     if (value === this.Characteristic.Active.INACTIVE) {
       this.deviceSocket.sendJson({ targetMode: 'off' });
       return callback(null);
@@ -189,6 +207,12 @@ export class HeaterCoolerAccessory {
   setTargetHeaterCoolerStateHandler(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     const mode = Object.keys(this.targetModes).find(key => this.targetModes[key] === value);
     this.platform.log.info(`Set TargetHeaterCoolerState: ${this.deviceConfig.name} -> ${mode}`);
+
+    if (!this.deviceSocket.isConnected()) {
+      this.platform.log.error(`Device Not Connected - ${this.deviceSocket.host}`);
+      return callback(new Error('Device Not Connected'));
+    }
+
     this.deviceSocket.sendJson({ targetMode: mode });
     callback(null);
   }
@@ -200,12 +224,24 @@ export class HeaterCoolerAccessory {
     }
 
     this.platform.log.info(`Set CoolingThresholdTemperature: ${this.deviceConfig.name} -> ${value}`);
+
+    if (!this.deviceSocket.isConnected()) {
+      this.platform.log.error(`Device Not Connected - ${this.deviceSocket.host}`);
+      return callback(new Error('Device Not Connected'));
+    }
+
     this.deviceSocket.sendJson({ targetTemperature: value });
     callback(null);
   }
 
   setHeatingThresholdTemperatureHandler(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     this.platform.log.info(`Set HeatingThresholdTemperature: ${this.deviceConfig.name} -> ${value}`);
+
+    if (!this.deviceSocket.isConnected()) {
+      this.platform.log.error(`Device Not Connected - ${this.deviceSocket.host}`);
+      return callback(new Error('Device Not Connected'));
+    }
+
     this.deviceSocket.sendJson({ targetTemperature: value });
     callback(null);
   }
@@ -213,6 +249,11 @@ export class HeaterCoolerAccessory {
   setRotationSpeedHandler(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     const targetFanSpeed = (value < 30) ? 'min' : (value > 80) ? 'max' : 'auto';
     this.platform.log.info(`Set RotationSpeed: ${this.deviceConfig.name} -> ${targetFanSpeed}`);
+
+    if (!this.deviceSocket.isConnected()) {
+      this.platform.log.error(`Device Not Connected - ${this.deviceSocket.host}`);
+      return callback(new Error('Device Not Connected'));
+    }
 
     if (this.currentFanState !== targetFanSpeed) {
       this.deviceSocket.sendJson({ targetFanSpeed });
@@ -223,6 +264,11 @@ export class HeaterCoolerAccessory {
 
   setSwingModeHandler(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     this.platform.log.info(`Set SwingMode: ${this.deviceConfig.name} -> ${value}`);
+
+    if (!this.deviceSocket.isConnected()) {
+      this.platform.log.error(`Device Not Connected - ${this.deviceSocket.host}`);
+      return callback(new Error('Device Not Connected'));
+    }
 
     if (this.platform.config.oscillateDirection === 'vertical') {
       this.deviceSocket.sendJson({ verticalSwing: Boolean(value)});

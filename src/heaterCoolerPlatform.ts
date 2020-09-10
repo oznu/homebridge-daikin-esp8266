@@ -1,6 +1,5 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 import Bonjour from 'bonjour';
-import * as mdnsResolver from 'mdns-resolver';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { HeaterCoolerAccessory } from './heaterCoolerAccessory';
@@ -65,10 +64,8 @@ export class HeaterCoolerPlatform implements DynamicPlatformPlugin {
 
   private async foundAccessory(service: BonjourService) {
     if (service.txt?.type === 'daikin-thermostat' && service.txt.mac) {
-      const host = await mdnsResolver.resolve4(service.host);
-
       const deviceConfig: HeaterCoolerDeviceConfig = {
-        host: host,
+        host: service.host,
         port: service.port,
         name: service.name,
         serial: service.txt.mac,
