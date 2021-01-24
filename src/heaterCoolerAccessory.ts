@@ -81,6 +81,7 @@ export class HeaterCoolerAccessory {
     this.humiditySensor = new HeaterCoolerHumiditySensor(this);
 
     this.service.getCharacteristic(this.Characteristic.CoolingThresholdTemperature)
+      .updateValue(25)
       .on('set', this.setCoolingThresholdTemperatureHandler.bind(this))
       .setProps({
         minValue: 18,
@@ -89,6 +90,7 @@ export class HeaterCoolerAccessory {
       });
 
     this.service.getCharacteristic(this.Characteristic.HeatingThresholdTemperature)
+      .updateValue(25)
       .on('set', this.setHeatingThresholdTemperatureHandler.bind(this))
       .setProps({
         minValue: 18,
@@ -97,10 +99,15 @@ export class HeaterCoolerAccessory {
       });
 
     this.service.getCharacteristic(this.Characteristic.Active)
+      .updateValue(this.Characteristic.Active.INACTIVE)
       .on('set', this.setActiveHandler.bind(this));
 
     this.service.getCharacteristic(this.Characteristic.TargetHeaterCoolerState)
+      .updateValue(this.Characteristic.TargetHeaterCoolerState.COOL)
       .on('set', this.setTargetHeaterCoolerStateHandler.bind(this));
+
+    this.service.getCharacteristic(this.Characteristic.CurrentHeaterCoolerState)
+      .updateValue(this.Characteristic.CurrentHeaterCoolerState.INACTIVE);
 
     this.service.getCharacteristic(this.Characteristic.RotationSpeed)
       .on('set', this.setRotationSpeedHandler.bind(this));
